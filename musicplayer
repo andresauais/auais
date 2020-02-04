@@ -1,0 +1,362 @@
+import javafx.application.Application;
+import javafx.stage.Stage;
+import javafx.util.Duration;
+import javafx.scene.Group;
+import javafx.scene.media.Media;  
+import javafx.scene.media.MediaPlayer;
+import javafx.scene.media.MediaView;
+import javafx.scene.media.MediaPlayer.Status;
+//Javafx apps imports
+import javafx.application.Application;
+import javafx.application.Platform;
+import javafx.beans.InvalidationListener;
+import javafx.beans.value.ChangeListener;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import javafx.geometry.Insets;
+import javafx.stage.FileChooser;
+import javafx.stage.Stage;
+import javafx.scene.Scene;
+
+//Imports for labels, menu, etc.
+import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
+import javafx.scene.control.Menu;
+import javafx.scene.control.MenuBar;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.Slider;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Alert.AlertType;
+import javafx.scene.control.Button;
+import javafx.scene.control.TextField;
+import javafx.scene.image.Image;
+import javafx.scene.control.TextArea;
+
+//Imports for layout
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
+
+//Imports for file support
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Scanner;
+import java.util.StringTokenizer;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Observable;
+
+public class BlastBox extends Application {
+	//Create visual components at class scope
+	Label lblAvailableTracks, lblSelectedTracks, lblVolume, lblStatus;
+			
+	Button btnAdd, btnRemove, btnRemoveAll, btnPlay, btnResume, btnPause, btnStop;
+			
+	//The list view
+	ListView <String> lvAvailableTracks, lvSelectedTracks;
+	
+	//Slider
+	Slider sliderVolume, sliderPlaying;
+	
+	MediaPlayer mediaPlayer;
+	
+	List<MediaPlayer> players;
+	
+	Duration length;
+	
+	
+	public BlastBox() {
+	}
+	
+	@Override
+	public void init() {
+		
+		//Create visiual components at class scope
+		lblAvailableTracks = new Label("Available Tracks:");
+		lblSelectedTracks = new Label("Selected Tracks:"); 
+		lblVolume = new Label("Volume:");
+		lblStatus = new Label("Status:");
+		
+		//Increase and decrease button.
+		btnAdd = new Button("Add>");
+		btnRemove = new Button("<Remove");
+		btnRemoveAll = new Button("<<Remove all");
+		btnPlay = new Button("Play");
+		btnResume = new Button("Resume");
+		btnPause = new Button("Pause");
+		btnStop = new Button("Stop");
+		
+		//The list view
+		lvAvailableTracks = new ListView <String>();
+		lvSelectedTracks = new ListView <String>();
+		
+		//Sliders
+		sliderVolume = new Slider();
+		sliderPlaying = new Slider();
+		
+		//adding the music files to the available tracks list view
+		lvAvailableTracks.setItems(getMusicFiles());
+		
+		players = new ArrayList<MediaPlayer>();
+
+		
+		//disable buttons for initialization
+		disableBtns();
+		
+		lvAvailableTracks.setOnMousePressed(ae->{
+			btnAdd.setDisable(false);
+			});
+		
+		lvSelectedTracks.setOnMousePressed(ae->{
+			btnRemoveAll.setDisable(false);
+			btnRemove.setDisable(false);
+			btnPlay.setDisable(false);
+			
+			});
+		
+		//handle events in button add
+		btnAdd.setOnAction(ae ->{
+			if(lvSelectedTracks.getItems().contains(lvAvailableTracks.getSelectionModel().getSelectedItem())) {
+				btnAdd.setDisable(true);
+			}
+
+			else {
+				lvSelectedTracks.getItems().add(lvAvailableTracks.getSelectionModel().getSelectedItem());
+				lvAvailableTracks.getItems().remove(lvAvailableTracks.getSelectionModel().getSelectedItem());
+				
+			}
+			btnAdd.setDisable(false);
+			
+			
+			if (lvAvailableTracks.getItems().isEmpty()) {
+				btnAdd.setDisable(true);
+			}
+			
+		});
+		
+		//handle events in button Remove
+		btnRemove.setOnAction(ae ->{
+			if(lvSelectedTracks.getItems().isEmpty()) {
+				btnRemove.setDisable(true);
+			}
+			else {
+				lvAvailableTracks.getItems().add(lvSelectedTracks.getSelectionModel().getSelectedItem());
+				lvSelectedTracks.getItems().remove(lvSelectedTracks.getSelectionModel().getSelectedItem());
+			}
+			btnRemove.setDisable(false);
+			
+			if (lvSelectedTracks.getItems().isEmpty()) {
+				lvSelectedTracks.getItems().clear();
+				disableBtns();
+				lvAvailableTracks.getItems().clear();
+				lvAvailableTracks.setItems(getMusicFiles());
+			}
+		});
+		
+		//handle events in button remove all
+		btnRemoveAll.setOnAction(ae ->{
+			lvSelectedTracks.getItems().clear();
+			disableBtns();
+			lvAvailableTracks.getItems().clear();
+			lvAvailableTracks.setItems(getMusicFiles());
+			mediaPlayer.stop();
+			
+		});
+		
+		//handle events in button play
+		btnPlay.setOnAction(ae ->{
+			String song = new File("./music4/"+lvSelectedTracks.getSelectionModel().getSelectedItem()).toURI().toString();
+			mediaPlayer = new MediaPlayer(new Media(song));
+			addListener();
+			sliderVolume.setValue(mediaPlayer.getVolume()*100);
+			sliderVolume.valueProperty().addListener((aw)-> {
+				if (sliderVolume.isValueChanging()) {
+					mediaPlayer.setVolume(sliderVolume.getValue() / 100.0);
+					}
+				});
+			btnPause.setDisable(false);
+			btnStop.setDisable(false);
+			btnResume.setDisable(true);
+			btnPlay.setDisable(true);
+				
+		});
+		
+		//Handle events in button pause
+		btnResume.setOnAction(ae ->{
+			btnPause.setDisable(false);
+			length = mediaPlayer.getCurrentTime();
+			resume();
+			btnResume.setDisable(true);
+			
+		});
+
+		//handle events in button pause
+		btnPause.setOnAction(ae ->{
+			mediaPlayer.pause();
+			btnPause.setDisable(true);
+			btnResume.setDisable(false);
+			btnPlay.setDisable(false);
+			
+			
+		});
+		
+		//handle events in button stop
+		btnStop.setOnAction(ae ->{
+			mediaPlayer.stop();
+			btnStop.setDisable(true);
+			btnPause.setDisable(true);
+			btnPlay.setDisable(false);
+		});
+		
+	}
+	@Override
+	public void start(Stage pStage) throws Exception {
+		//Set the title
+		pStage.setTitle("MP3BlastBox");
+		
+		//Set the width and height.
+		pStage.setWidth(450);
+		pStage.setHeight(450);
+		
+		BorderPane bp = new BorderPane();
+		
+		//calling grid method to create grid and center it
+		bp.setCenter(grid());
+		//Create a scene
+		Scene s = new Scene(bp);
+		
+		s.getStylesheets().add("/stylesheet.css");
+		
+		pStage.getIcons().add(new Image("spotify.png"));
+		
+		//Set the scene
+		pStage.setScene(s);
+		
+		//Show the stage
+		pStage.show();
+	}
+	public GridPane grid() {
+		//create a layout
+		GridPane gp = new GridPane();
+				
+		//Set the gp gaps.
+		gp.setHgap(10);
+		gp.setVgap(10);
+		
+		//add the gp to the center fo the bp
+		gp.setPadding(new Insets(10));
+				
+		btnAdd.setMinWidth(120);
+		btnRemove.setMinWidth(120);
+		btnRemoveAll.setMinWidth(120);
+		btnPlay.setMinWidth(120);
+		btnResume.setMinWidth(120);
+		btnPause.setMinWidth(120);
+		btnStop.setMinWidth(120);
+		
+		//Set the spacing around the edges
+		gp.setPadding(new Insets(10));
+		
+		//Add components to the layout
+		gp.add(lblAvailableTracks, 0, 0);
+		gp.add(lvAvailableTracks, 0, 1, 1, 9);
+		
+		gp.add(btnAdd, 2, 1);
+		gp.add(btnRemove, 2, 2);
+		gp.add(btnRemoveAll, 2, 3);
+		gp.add(btnPlay, 2, 4);
+		gp.add(btnResume, 2, 5);
+		gp.add(btnPause, 2, 6);
+		gp.add(btnStop, 2, 7);
+		gp.add(lblVolume, 2, 8);
+		gp.add(sliderVolume, 2, 9);
+		
+		gp.add(lblSelectedTracks, 3, 0);
+		gp.add(lvSelectedTracks, 3, 1, 1, 9);
+		gp.add(lblStatus, 3, 10);
+		gp.add(sliderPlaying, 3, 11);
+		
+	       
+	return gp;
+	}
+
+	public ObservableList <String> getMusicFiles(){
+		ObservableList <String> musicFiles = FXCollections.observableArrayList();
+		
+		//String array to store a list of playable files.
+		String[] fileList;
+		
+		//Dot forwardslash means it is local to the current location
+		File f = new File("./music4");
+		
+		//Call list() to get a directory listing.
+		fileList = f.list();
+		
+		//Add the array of files to the music files observable list
+		musicFiles.addAll(fileList);
+		
+		//return
+		return musicFiles;
+		
+	}
+	
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+		launch();
+	}
+	
+	//method to disable buttons
+	public void disableBtns() {
+		btnAdd.setDisable(true);
+		btnRemove.setDisable(true);
+		btnRemoveAll.setDisable(true);
+		btnPlay.setDisable(true);
+		btnResume.setDisable(true);
+		btnPause.setDisable(true);
+		btnStop.setDisable(true);
+	}
+	
+	public void addListener () {
+		mediaPlayer.currentTimeProperty().addListener((InvalidationListener)->{
+		
+		Duration trackDuration = mediaPlayer.getTotalDuration();
+		
+		Duration duration = mediaPlayer.getCurrentTime();
+		
+		//Calculate the track slider position.
+		sliderPlaying.setValue((duration.toSeconds()*100)/trackDuration.toSeconds());
+		
+		//Show the current track position in a label.
+				
+		double minutes = Math.floor(duration.toMinutes());
+		double seconds = Math.floor(duration.toSeconds() % 60);
+		
+		int m = (int) minutes;
+		int s = (int) seconds;
+		
+		lblStatus.setText("Status: Playing " + m + ":" + s);
+		
+		});
+		mediaPlayer.play();
+		sliderPlaying.valueProperty().addListener((ae) -> {
+			Duration trackDuration = mediaPlayer.getTotalDuration();
+			if (sliderPlaying.isValueChanging()) {
+				// multiply duration by percentage calculated by slider position
+				mediaPlayer.seek(trackDuration.multiply(sliderPlaying.getValue() / 100.0));
+		       }
+		    });	
+		}//addListener()
+	
+	public void resume() {
+		mediaPlayer.seek(length.multiply(sliderPlaying.getValue()/100));
+		mediaPlayer.seek(length);
+		mediaPlayer.getStartTime().add(length);
+		mediaPlayer.play();
+	}//Resume
+
+}
